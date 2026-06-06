@@ -1,0 +1,7 @@
+{
+    "name": "grabber-host",
+    "description": "grabber native messaging host for yt-dlp",
+    "path": "C:\\Users\\parth\\Documents\\Programming\\Projects\\grabber-extension\\native\\grabber_host.py",
+    "type": "stdio",
+    "allowed_extensions": ["grabber@extension"]
+}

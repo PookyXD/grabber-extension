@@ -7,6 +7,10 @@
     "icons": {
         "48": "icons/icon48.png"
     },
+
+    "background": {
+        "scripts": ["background.js"]
+    },
     
     "content_scripts": [
         {
@@ -18,8 +22,16 @@
     "permissions": [
         "activeTab",
         "clipboardWrite",
-        "downloads"
+        "downloads",
+        "nativeMessaging"
     ],
+
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "grabber@extension",
+            "strict_min_version": "91.0"
+        }
+    },
 
     "action": {
         "default_icon": "icons/icon48.png",
