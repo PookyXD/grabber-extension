@@ -5,9 +5,12 @@ import sys
 import json
 import struct
 import subprocess
-import threading
 import os
 
+if sys.platform == "win32":
+    import msvcrt
+    msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
+    msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
 #message read/write with firefox
 
 def read_message():

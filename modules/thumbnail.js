@@ -1,23 +1,5 @@
 //handles everything thumbnail related
 
-function getVideoTitle(link) {
-    const label = link.getAttribute("aria-label");
-    if(label && label.trim().length>3){
-        return sanitizeFilename(label.trim());
-    }
-    return "grabbed-thumbnail";
-}
-
-//turning titles to safe filenames
-function sanitizeFilename(title){
-    return title
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, "")
-        .trim()
-        .replace(/\s+/g, "-")
-        .substring(0, 60);
-}
-
 //trying to get best thumbnail url res
 function getBestThumbnailUrl(url) {
     return url.replace(
@@ -29,12 +11,9 @@ function getBestThumbnailUrl(url) {
 // the main download function
 function downloadThumbnail(link, imageUrl) {
     const bestUrl = getBestThumbnailUrl(imageUrl);
-    const title = getVideoTitle(link);
-    const filename = `${timestamp}-${title}.png`;
-
     //trying max res first, fallback to original if it fails
-    attemptDownload(bestUrl, filename)
-        .catch(() => attemptDownload(imageUrl, filename));
+    attemptDownload(bestUrl, "thumbnail.png")
+        .catch(() => attemptDownload(imageUrl, "thumbnail.png"));
 }
 
 //jpg to png
