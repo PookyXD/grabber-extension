@@ -15,8 +15,93 @@ function removePooks() {
 
 }
 
+//quality panel
 
-function showPooks(link, imageUrl) {
+let qualityPanel = null;
+
+function removeQualityPanel(){
+    if (qualityPanel) {
+        qualityPanel.remove();
+        qualityPanel = null;
+    }
+}
+
+function showQualityPanel(link){
+    //remove first
+    removeQualityPanel();
+
+    const href = link.href;
+    qualityPanel = document.createElement("div");
+
+    //DESIGN -placeholder
+    qualityPanel.style.cssText = `
+        position: fixed;
+        z-index: 99999;
+        background: white;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        font-family: sans-serif;
+        font-size: 13px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    `;
+
+    const rect = pooksEl.getBoundingClientRect();
+    qualityPanel.style.left = rect.left + "px";
+
+    //build quality buttons
+    const qualities = ["1080p", "720p", "480p", "audio only"];
+
+    qualities.forEach(quality => {
+        const btn = document.createElement("button");
+        btn.textContent = quality;
+
+        //DESIGN: button styles
+        btn.style.cssText = `
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #f9f9f9;
+            cursor: pointer;
+            font-size: 13px;
+            text-align: left;
+        `;
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+
+            //mapping "audio only"
+            const qualityKey = quality == "audio only" ? "audio" : quality;
+
+            startVideoDownload(href,qualityKey);
+            removeQualityPanel();
+            removePooks();
+        });
+
+        qualityPanel.appendChild(btn);
+    });
+    //closing panel when clicked outside
+    document.addEventListener("click", removeQualityPanel, { once: true});
+
+    document.body.appendChild(qualityPanel);
+}
+
+//starts the video download by sending request to background.js
+function startVideoDownload(url,quality) {
+    browser.runtime.sendMessage({
+        action: "download",
+        url: url,
+        quality: quality
+    }).then(response => {
+        console.log("Grabber: download started", response);
+    }).catch(err => {
+        console.log("Grabber: download failed", err)
+    });
+}
+
+function showPooks(link, imageUrl, mode) {
 
         //checking for pooks is already on this exact thumbnail to stop him from flickering
         if (currentThumb == link) return;
@@ -26,6 +111,13 @@ function showPooks(link, imageUrl) {
 
         //current thumbnail
         currentThumb = link;
+
+        //always find thumbnail even in video mode
+        const img = link.querySelector("img");
+        const thumbUrl = imageUrl || (img ? img.src : null);
+
+        //storing the mode
+        const currentMode = mode;
 
         const card = link.closest(
             "ytd-rich-item-renderer, ytd-compact-video-renderer, ytd-video-renderer, ytd-grid-video-renderer"
@@ -92,6 +184,8 @@ function showPooks(link, imageUrl) {
         //on the element itself
         pooksEl.dataset.imageUrl = imageUrl;
 
+        pooksEl.dataset.imageUrl = thumbUrl || "";
+
         //adding pooks to the page
         document.body.appendChild(pooksEl);
 
@@ -102,15 +196,20 @@ function showPooks(link, imageUrl) {
 
             //grabbing the image URL stored on the element
             const imageUrl = pooksEl.dataset.imageUrl;
+            
+            if (currentMode === "thumbnail") {
+                downloadThumbnail(titleLink, pooksEl.dataset.imageUrl);
 
-            downloadThumbnail(titleLink, pooksEl.dataset.imageUrl);
-
-            // DESIGN: grab feedback
-            if (pooksEl) {
-                pooksEl.style.transform = "scale(1.3)";
-                setTimeout(() => {
-                    if (pooksEl) pooksEl.style.transform = "scale(1)";
-                }, 150);
+                // DESIGN: grab feedback
+                if (pooksEl) {
+                    pooksEl.style.transform = "scale(1.3)";
+                    setTimeout(() => {
+                        if (pooksEl) pooksEl.style.transform = "scale(1)";
+                    }, 150);
+                }
+            } else if (currentMode === "video") {
+                //quality selector panel
+                showQualityPanel(link);
             }
         });
 
@@ -124,21 +223,32 @@ function showPooks(link, imageUrl) {
         });
 }
 
+//checking for yt vid link
+function isYouTubeVideoLink(link) {
+    const href = link.getAttribute("href");
+    if (!href) return false;
+
+    return href.includes("/watch?v=") || href.includes("youtu.be/");
+}
+
 //mouseover runs whenever cursor enters an element
 document.addEventListener("mouseover", (event) => {
-
-    //event.target is element the cursor entered and finds the nearest ancestor <a> tag
     const link = event.target.closest("a");
     if (!link) return;
 
-    //looking for <img> tag
+    //video link hover
+    if (isYouTubeVideoLink(link)) {
+        showPooks(link, null, "video");
+        return;
+    }
+
+    //thumbnail hover
     const img = link.querySelector("img");
-    if (!img) return;
+    if (img && img.src.includes("ytimg.com")) {
+        showPooks(link, img.src, "thumbnail");
+        return;
+    }
 
-    //checking for ytimg.com so mr pooks only pop up when we are actually on a thumbnail image and not just any other image
-    if (!img.src.includes("ytimg.com")) return;
-
-    showPooks(link, img.src);
 });
 
 //hiding pooks when cursor leaves the thumbnail
