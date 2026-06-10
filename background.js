@@ -10,6 +10,8 @@ function connectToHost(){
 
     nativePort.onMessage.addListener((message) => {
 
+        console.log("background got message from native host:", message);
+
         browser.tabs.query({ active: true, currentWindow: true})
             .then(tabs => {
                 if(tabs[0]){

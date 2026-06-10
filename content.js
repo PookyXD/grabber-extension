@@ -31,6 +31,7 @@ function showQualityPanel(link){
     removeQualityPanel();
 
     const href = link.href;
+    console.log("Grabber: video URL is", href);
     qualityPanel = document.createElement("div");
 
     //DESIGN -placeholder
@@ -88,8 +89,83 @@ function showQualityPanel(link){
     document.body.appendChild(qualityPanel);
 }
 
+//progress panel
+let progressPanel = null;
+function removeProgressPanel() {
+    if (progressPanel) {
+        progressPanel.remove();
+        progressPanel = null;
+    }
+}
+
+function showProgressPanel() {
+    removeProgressPanel();
+
+    progressPanel = document.createElement("div");
+
+    //DESIGN
+    progressPanel.style.cssText = `
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        z-index: 99999;
+        background: white;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 14px 16px;
+        font-family: sans-serif;
+        font-size: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        min-width: 260px;
+        max-width: 340px;
+    `;
+
+    progressPanel.innerHTML = `
+        <div style="font-weight:600; margin-bottom:8px;">
+            Grabber is working...
+        </div>
+        <div id="grabber-progress-text"
+             style="color:#555; word-break:break-all;">
+            Starting download...
+        </div>
+    `;
+
+    document.body.appendChild(progressPanel);
+}
+
+function updateProgressPanel(text) {
+    if (!progressPanel) return;
+    const el = progressPanel.querySelector("#grabber-progress-text");
+    if (el) el.textContent = text;
+}
+
+function showDonePanel() {
+    if (!progressPanel) return;
+    const el = progressPanel.querySelector("#grabber-progress-text");
+    if(el) {
+        el.textContent = "✅ Download complete!";
+
+        //DESIGN: completion animation
+        setTimeout(() => removeProgressPanel(), 3000);
+    }
+}
+
+function showErrorPanel(msg) {
+    if (!progressPanel) return;
+    const el = progressPanel.querySelector("#grabber-progress-text");
+    if (el) {
+        el.textContent = "❌ " + msg;
+        setTimeout(() => removeProgressPanel(), 4000);
+    }
+}
+
+
+
+
 //starts the video download by sending request to background.js
 function startVideoDownload(url,quality) {
+    showProgressPanel();
+
     browser.runtime.sendMessage({
         action: "download",
         url: url,
@@ -97,7 +173,8 @@ function startVideoDownload(url,quality) {
     }).then(response => {
         console.log("Grabber: download started", response);
     }).catch(err => {
-        console.log("Grabber: download failed", err)
+        console.log("Grabber: download failed", err);
+        showErrorPanel("Could not reach download host");
     });
 }
 
@@ -209,7 +286,7 @@ function showPooks(link, imageUrl, mode) {
                 }
             } else if (currentMode === "video") {
                 //quality selector panel
-                showQualityPanel(link);
+                showQualityPanel(titleLink);
             }
         });
 
@@ -261,5 +338,29 @@ document.addEventListener("mouseout", (event) => {
     if (link && link == currentThumb) {
         if (pooksEl && pooksEl.contains(event.relatedTarget)) return;
         removePooks();
+    }
+});
+
+
+//listen for progress from background.js
+browser.runtime.onMessage.addListener((message) => {
+
+    console.log("content got message:", message);
+
+    if (message.type !== "native_message") return;
+
+    const data = message.data;
+
+    if(data.type === "progress") {
+        const text = data.line.replace("[download]", "").trim();
+        updateProgressPanel(text);
+    }
+
+    if (data.type === "done") {
+        showDonePanel();
+    }
+
+    if (data.type === "error") {
+        showErrorPanel(data.message);
     }
 });

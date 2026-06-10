@@ -7,31 +7,61 @@ import struct
 import subprocess
 import os
 
-if sys.platform == "win32":
-    import msvcrt
-    msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
-    msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
-#message read/write with firefox
+# emergency log — writes before anything else runs
+LOG_PATH = os.path.join(os.path.expanduser("~"), "grabber_debug.log")
+
+def log(msg):
+    with open(LOG_PATH, "a") as f:
+        f.write(str(msg) + "\n")
+
+log("SCRIPT STARTED")
+
+try:
+    if sys.platform == "win32":
+        import msvcrt
+        msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
+        msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
+        log("binary mode set")
+
+    stdin_bin  = open(sys.stdin.fileno(),  "rb", closefd=False, buffering=0)
+    stdout_bin = open(sys.stdout.fileno(), "wb", closefd=False, buffering=0)
+    log("binary streams opened")
+
+except Exception as e:
+    log(f"SETUP CRASH: {e}")
+    import traceback
+    log(traceback.format_exc())
+    sys.exit(1)
 
 def read_message():
-    #reading the first 4 bytes to get the message length
-    raw_length = sys.stdin.buffer.read(4)
-    if not raw_length:
+    raw_length = b""
+    while len(raw_length) < 4:
+        chunk = stdin_bin.read(4 - len(raw_length))
+        if not chunk:
+            return None
+        raw_length += chunk
+
+    length = struct.unpack("<I", raw_length)[0]
+
+    if length > 1024 * 1024:
+        log(f"bad length received: {length}")
         return None
-    length = struct.unpack('<I', raw_length)[0]
-    #read bytes and decode as JSON
-    message = sys.stdin.buffer.read(length).decode('utf-8')
-    return json.loads(message)
+
+    message = b""
+    while len(message) < length:
+        chunk = stdin_bin.read(length - len(message))
+        if not chunk:
+            return None
+        message += chunk
+
+    log(f"received message: {message.decode('utf-8')}")
+    return json.loads(message.decode("utf-8"))
 
 def send_message(data):
-    
-    #encoding json
-    encoded = json.dumps(data).encode('utf-88')
-
-    sys.stdout.buffer.write(struct.pack('<I', len(encoded)))
-
-    sys.stdout.buffer.write(encoded)
-    sys.stdout.buffer.flush()
+    encoded = json.dumps(data).encode("utf-8")
+    stdout_bin.write(struct.pack("<I", len(encoded)))
+    stdout_bin.write(encoded)
+    stdout_bin.flush()
 
 
 #download handler -- recieves url and quality from extension
@@ -39,6 +69,8 @@ def send_message(data):
 #puts it back to the extension
 
 def download_video(url, quality, download_dir):
+
+    log(f"download_video called: url- {url} quality={quality}")
 
     #yt-dlp to download both files and ffmpeg to merge them
 
@@ -54,7 +86,7 @@ def download_video(url, quality, download_dir):
     output_template = os.path.join(download_dir, "%(title)s.%(ext)s")
 
     cmd = [
-        sys.executable, "-m", "yt_dlp",
+        r"C:\Python314\python.exe", "-m", "yt_dlp",
         "--format", fmt,
         "--output", output_template,
         "--merge-output-format", "mp4",
@@ -69,13 +101,14 @@ def download_video(url, quality, download_dir):
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True
     )
 
     for line in process.stdout:
-        line = line.strip()
+        line = line.decode("utf-8", errors="ignore").strip()
         if not line:
             continue
+
+        log(f"yt-dlp line: {line}")
 
         #each yt-dlp progress line sent back to the extension
 
@@ -94,6 +127,7 @@ def download_video(url, quality, download_dir):
 #each message comes in as JSON
 
 def main():
+    log("main loop started")
     while True:
         message = read_message()
         if message is None:
@@ -115,4 +149,10 @@ def main():
             send_message({"type": "pong"})
 
 if __name__ == "__main__":
-    main()
+    try:
+        log("grabber host started")
+        main()
+    except Exception as e:
+        log("CRASH: " + str(e))
+        import traceback
+        log(traceback.format_exc())
